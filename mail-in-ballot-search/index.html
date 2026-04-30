@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mail-in Ballot Search</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .search-wrapper {
+            position: relative;
+            margin-bottom: 24px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 16px 20px;
+            font-size: 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            outline: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            background: var(--surface);
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
+
+        .results {
+            display: grid;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 16px 0;
+            color: var(--primary);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px dashed var(--border);
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 12px; }
+            .stat-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="search-wrapper">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search for a county name..." autocomplete="off">
+    </div>
+    <div id="results" class="results"></div>
+</div>
+
+<script>
+    let countyData = [];
+    const searchInput = document.getElementById('searchInput');
+    const resultsDiv = document.getElementById('results');
+
+    // Number formatting helper
+    const formatNumber = (numStr) => {
+        const num = parseFloat(numStr);
+        if (isNaN(num)) return numStr;
+        return num.toLocaleString('en-US');
+    };
+
+    // Percent formatting helper
+    const formatPercent = (numStr) => {
+        const num = parseFloat(numStr);
+        if (isNaN(num)) return numStr;
+        return num.toFixed(2) + '%';
+    };
+
+    // Parse CSV
+    const parseCSV = (text) => {
+        const lines = text.trim().split('\n');
+        const headers = lines[0].split(',');
+        
+        return lines.slice(1).map(line => {
+            const values = line.split(',');
+            const obj = {};
+            headers.forEach((header, i) => {
+                obj[header.trim()] = values[i] ? values[i].trim() : '';
+            });
+            return obj;
+        });
+    };
+
+    // Load data
+    fetch('cleanmail.csv')
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.text();
+        })
+        .then(text => {
+            countyData = parseCSV(text);
+            renderResults(countyData);
+        })
+        .catch(error => {
+            console.error('Error loading data:', error);
+            resultsDiv.innerHTML = '<div class="no-results">Error loading data. Please try again later.</div>';
+        });
+
+    // Render results
+    const renderResults = (data) => {
+        if (data.length === 0) {
+            resultsDiv.innerHTML = '<div class="no-results">No counties found matching your search.</div>';
+            return;
+        }
+
+        resultsDiv.innerHTML = data.map(county => `
+            <div class="card">
+                <h2 class="card-title">${county.Jurisdiction_Name || 'Unknown County'}</h2>
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Votes Cast</span>
+                        <span class="stat-value">${formatNumber(county.F1a)}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Mail Votes</span>
+                        <span class="stat-value">${formatNumber(county.TotalMailInVotes)}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Turnout</span>
+                        <span class="stat-value">${formatPercent(county.Turnout)}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Mail Vote</span>
+                        <span class="stat-value">${formatPercent(county.percent)}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Mail Ballots Rejected</span>
+                        <span class="stat-value">${formatNumber(county.C9a)}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Rejected (Late)</span>
+                        <span class="stat-value">${formatNumber(county.C9b)}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    };
+
+    // Search functionality
+    searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        if (!query) {
+            renderResults(countyData);
+            return;
+        }
+
+        const filtered = countyData.filter(county => 
+            (county.Jurisdiction_Name || '').toLowerCase().includes(query)
+        );
+        renderResults(filtered);
+    });
+</script>
+
+</body>
+</html>
